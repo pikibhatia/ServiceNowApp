@@ -13,13 +13,10 @@ class ServiceNowAPI:
         if query_params==None:
             url = f"{self.base_url}/{table_name}"
         else:
-            url = f"{self.base_url}/{table_name}{query_params}"
-            #st.write(url)
-        headers = {"Accept": "application/json"}
-        st.write(url)
+            url = f"{self.base_url}/{table_name}{query_params}"            
+        headers = {"Accept": "application/json"}        
         response = requests.get(url, headers=headers, auth=self.auth, params=query_params)
-        if response.status_code == 200:
-            # st.write(response.json())
+        if response.status_code == 200:            
             return response.json().get("result", [])
         else:
             st.error(f"Failed to fetch data from {table_name}: {response.status_code}")
@@ -29,30 +26,21 @@ class ServiceNowAPI:
         if queryprm !="":
             query = f"^opened_at>={start_date}^opened_at<={end_date}^{queryprm}"
         else:
-            query = f"^opened_at>={start_date}^opened_at<={end_date}"
-        #st.write(query)
+            query = f"^opened_at>={start_date}^opened_at<={end_date}"        
         return self.fetch_data("incident", f"?sysparm_fields=state,short_description,business_service.name,number,priority,u_prob_type,category,assignment_group.name,sys_created_on,opened_at,closed_at,closed_by.employee_number,closed_by.user_name,closed_by.name,assigned_to.employee_number,assigned_to.user_name,assigned_to.name,sys_updated_on,impact&sysparm_limit=30000&sysparm_query=assignment_group.u_provider_rollup=IBM{query}")
 
     def get_service_requests(self, start_date, end_date, queryprm):
         if queryprm !="":
             query = f"opened_at>={start_date}^opened_at<={end_date}^{queryprm}"
         else:
-            query = f"opened_at>={start_date}^opened_at<={end_date}"
-        #st.write(query)
+            query = f"opened_at>={start_date}^opened_at<={end_date}"        
         return self.fetch_data("sc_request", f"?sysparm_fields=state,short_description,business_service.name,number,priority,category,assignment_group.name,sys_created_on,opened_at,closed_at,closed_by.employee_number,closed_by.user_name,closed_by.name,assigned_to.employee_number,assigned_to.user_name,assigned_to.name,sys_updated_on,impact&sysparm_limit=30000&sysparm_query={query}")
 
     def get_problems(self, start_date, end_date):
         query = f"^opened_at>={start_date}^opened_at<={end_date}"
         return self.fetch_data("problem", "?sysparm_query=sys_created_on"+query)
 
-    def get_slas(self):
-        return self.fetch_data("task_sla")
-
-    def get_assignment_groups(self):
-        return self.fetch_data("sys_user_group", f"?sysparm_query=u_provider_rollup=IBM")
-
-    def get_business_apps(self):
-        return self.fetch_data("cmdb_ci_business_app")
+  
 
 # Streamlit UI Setup
 st.set_page_config("ServiceNow Dashboard", layout="wide")
@@ -70,6 +58,7 @@ with date_col2:
     input_end_date = st.date_input("End Date", datetime.now())
     end_datetime = datetime.combine(input_end_date, datetime.max.time())
     end_date= end_datetime.strftime("%Y-%m-%d %H:%M:%S")
+
 col1,col2 = st.columns(2)
 with col1:
     options = ["All", "ANI-LATAM", "BPCS", "Collaboration", "DBA", "Finance", "Integration", "Legacy ERP", "Manufacturing", "Quality", "SAP"]
@@ -102,6 +91,7 @@ with col2:
     priorityvalue=""
     if priorityselected !="All":        
         priorityvalue = str(priorityselected)
+
 paramquery=""
 if priorityvalue!="":
     paramquery=f"priority={priorityvalue}"
@@ -111,11 +101,9 @@ else:
     if assignment_group_params != "":
         paramquery=assignment_group_params
 
-# assignment_group_params = f"priority={priorityvalue}^{assignment_group_params}"    
-    
 st.markdown("---")
 
-tabs = st.tabs(["Incidents", "Service Requests", "Problems", "SLAs", "Assignment Groups", "Business Apps"])
+tabs = st.tabs(["Incidents", "Service Requests", "Problems"])
 
 with tabs[0]:
     st.header("Incidents")
@@ -124,11 +112,7 @@ with tabs[0]:
        
         data = api.get_incidents(start_date, end_date, paramquery)
         df = pd.DataFrame(data) 
-        st.write("Total Incidents: ",len(df)) 
-        # total_open = df["closed_at"].isna().sum()
-        # st.write("Total Open Incidents: ",total_open) 
-        # total_closed = df["closed_at"].notna().sum()
-        # st.write("Total Open Incidents: ",total_closed) 
+        st.write("Total Incidents: ",len(df))         
         if len(df)>0:
             # Make sure the date columns are in datetime format
             df["opened_at"] = pd.to_datetime(df["opened_at"], errors="coerce")
@@ -156,13 +140,7 @@ with tabs[0]:
             combined["Closed"] = combined["Closed"].astype(int)
 
             # Prepare for plotting
-            long_df = pd.melt(
-                combined,
-                id_vars=["Week"],
-                value_vars=["Opened", "Closed"],
-                var_name="Status",
-                value_name="Count"
-            )
+            long_df = pd.melt(combined, id_vars=["Week"], value_vars=["Opened", "Closed"], var_name="Status", value_name="Count")
 
             # Plot using Plotly
             fig1 = px.bar(
@@ -186,11 +164,7 @@ with tabs[0]:
             st.plotly_chart(fig2, use_container_width=True)
 
             #------------------backlog graph--------------------
-            # # Ensure datetime conversion
-            # df["opened_at"] = pd.to_datetime(df["opened_at"], errors="coerce")
-            # df["closed_at"] = pd.to_datetime(df["closed_at"], errors="coerce")
-
-            # # Create week start (Monday) column
+            # Create week start (Monday) column
             df["week"] = df["opened_at"].apply(lambda x: x.to_period("W").start_time if pd.notna(x) else pd.NaT)
 
             # Get range of weeks (Monday of each week)
@@ -206,8 +180,8 @@ with tabs[0]:
         
                 opened_to_date = df[df["opened_at"] <= week_end].shape[0]
                 closed_to_date = df[df["closed_at"] <= week_end].shape[0]
-                backlog = opened_to_date - closed_to_date
-                
+
+                backlog = opened_to_date - closed_to_date                
                 backlog_data.append({"Week": week_label, "Backlog": backlog})
 
             # Convert to DataFrame
@@ -221,16 +195,8 @@ with tabs[0]:
                 title="Incremental Weekly Backlog of Open Incidents",
                 markers=True
             )
-            # Rotate x-axis labels for better readability
-            # fig3.update_layout(xaxis_tickangle=-45)
+            
             st.plotly_chart(fig3, use_container_width=True)
-
-            # category_counts = df["category"].value_counts().reset_index()
-            # category_counts.columns = ["Category", "Count"]
-
-            # fig3 = px.bar(category_counts, x="Category", y="Count", title="Incidents by Category",color_discrete_sequence=["#9EE6CF"])
-            #fig.show()
-            # st.plotly_chart(fig3, use_container_width=True)
             st.write(df)
             st.download_button("Download Incidents", df.to_csv().encode(), "incidents.csv")
 
@@ -268,13 +234,7 @@ with tabs[1]:
             combined["Closed"] = combined["Closed"].astype(int)
 
             # Prepare for plotting
-            long_df = pd.melt(
-                combined,
-                id_vars=["Week"],
-                value_vars=["Opened", "Closed"],
-                var_name="Status",
-                value_name="Count"
-            )
+            long_df = pd.melt(combined, id_vars=["Week"], value_vars=["Opened", "Closed"], var_name="Status", value_name="Count")
 
             # Plot using Plotly
             fig1 = px.bar(
@@ -298,16 +258,11 @@ with tabs[1]:
             st.plotly_chart(fig2, use_container_width=True)
 
             #------------------backlog graph--------------------
-            # # Ensure datetime conversion
-            # df["opened_at"] = pd.to_datetime(df["opened_at"], errors="coerce")
-            # df["closed_at"] = pd.to_datetime(df["closed_at"], errors="coerce")
-
-            # # Create week start (Monday) column
+            # Create week start (Monday) column
             df["Week"] = df["opened_at"].apply(lambda x: x.to_period("W").start_time if pd.notna(x) else pd.NaT)
-            st.write(df["Week"])
+                        
             # Get range of weeks (Monday of each week)
-            all_weeks = pd.date_range(start=df["opened_at"].min(), end=pd.Timestamp.today(), freq='W-MON')
-            st.write("--------------all_weeks:",all_weeks )
+            all_weeks = pd.date_range(start=df["opened_at"].min(), end=pd.Timestamp.today(), freq='W-MON')            
             
             # Initialize list for backlog data
             backlog_data = []
@@ -319,13 +274,13 @@ with tabs[1]:
         
                 opened_to_date = df[df["opened_at"] <= week_end].shape[0]
                 closed_to_date = df[df["closed_at"] <= week_end].shape[0]
+
                 backlog = opened_to_date - closed_to_date
-                st.write("--------------backlog:", backlog)                
                 backlog_data.append({"Week": week_label, "Backlog": backlog})
 
             # Convert to DataFrame
             backlog_df = pd.DataFrame(backlog_data)
-            st.write(backlog_df)
+            
             # Plot backlog
             fig3 = px.line(
                 backlog_df,
@@ -334,16 +289,8 @@ with tabs[1]:
                 title="Incremental Weekly Backlog of Open Requests",
                 markers=True
             )
-            # Rotate x-axis labels for better readability
-            # fig3.update_layout(xaxis_tickangle=-45)
+           
             st.plotly_chart(fig3, use_container_width=True)
-
-            # category_counts = df["category"].value_counts().reset_index()
-            # category_counts.columns = ["Category", "Count"]
-
-            # fig3 = px.bar(category_counts, x="Category", y="Count", title="Incidents by Category",color_discrete_sequence=["#9EE6CF"])
-            #fig.show()
-            # st.plotly_chart(fig3, use_container_width=True)
             st.write(df)
             st.download_button("Download Requests", df.to_csv().encode(), "requests.csv")
 
@@ -355,26 +302,4 @@ with tabs[2]:
         st.write(df)
         st.download_button("Download Problems", df.to_csv().encode(), "problems.csv")
 
-with tabs[3]:
-    st.header("SLA Details")
-    if st.button("Load SLAs"):
-        data = api.get_slas()
-        df = pd.DataFrame(data)
-        st.write(df)
-        st.download_button("Download SLAs", df.to_csv().encode(), "slas.csv")
-
-with tabs[4]:
-    st.header("Assignment Groups")
-    if st.button("Load Assignment Groups"):
-        data = api.get_assignment_groups()
-        df = pd.DataFrame(data)
-        st.write(df)
-        st.download_button("Download Groups", df.to_csv().encode(), "assignment_groups.csv")
-
-with tabs[5]:
-    st.header("Business Applications")
-    if st.button("Load Business Applications"):
-        data = api.get_business_apps()
-        df = pd.DataFrame(data)
-        st.write(df)
-        st.download_button("Download Apps", df.to_csv().encode(), "business_apps.csv")
+   
