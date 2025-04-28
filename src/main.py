@@ -363,7 +363,8 @@ def show_dashboard():
                         st.plotly_chart(fig3, use_container_width=True)
                     #------------------Backlog Graph End--------------------
                     with st.expander("Request Table"):
-                        st.write(df)
+                        df_hidden = df.drop(columns=["week", "opened_week_start", "closed_week_start","opened_week_range","closed_week_range"])
+                        st.write(df_hidden)
                         st.download_button("Download Requests", df.to_csv().encode(), "requests.csv")
 
     with tabs[2]:
